@@ -1,14 +1,10 @@
 # Bore-Log Extractor — Streamlit (v5 – Clip to Depth)
-# Port of the user's HTML/JS tool to a single-file Streamlit app.
 # --------------------------------------------------------------
-# Quickstart (local):
-#   1) pip install -U -r requirements.txt
-#      (or: pip install -U streamlit streamlit-drawable-canvas Pillow numpy pandas openpyxl pytesseract pymupdf)
-#   2) Install the Tesseract binary (required by pytesseract):
-#        - macOS: `brew install tesseract`
-#        - Ubuntu/Debian: `sudo apt-get install tesseract-ocr`
-#        - Windows (download installer): https://github.com/UB-Mannheim/tesseract/wiki
-#   3) streamlit run app.py
+# Quickstart:
+#   pip install -U -r requirements.txt
+#   (or: pip install -U streamlit streamlit-drawable-canvas Pillow numpy pandas openpyxl pytesseract pymupdf)
+#   Install Tesseract: macOS `brew install tesseract`; Ubuntu/Debian `sudo apt-get install tesseract-ocr`
+#   streamlit run app.py
 # --------------------------------------------------------------
 
 from __future__ import annotations
@@ -31,15 +27,13 @@ import streamlit as st
 # Some recent Streamlit versions moved `image_to_url` from
 # `streamlit.elements.image` to `streamlit.image_utils`. The
 # streamlit-drawable-canvas component still imports the old path.
-# The shim below restores that symbol for compatibility.
 import sys, types
 try:
-    # If this import works, you're on an older Streamlit and don't need the shim.
     from streamlit.elements import image as _st_image  # noqa: F401
 except Exception:
     from streamlit import image_utils as _st_image_utils
     shim = types.ModuleType("streamlit.elements.image")
-    shim.image_to_url = _st_image_utils.image_to_url  # provide expected symbol
+    shim.image_to_url = _st_image_utils.image_to_url
     sys.modules["streamlit.elements.image"] = shim
 
 from streamlit_drawable_canvas import st_canvas
@@ -50,7 +44,6 @@ st.set_page_config(page_title="Bore-Log Extractor v5 — Streamlit", layout="wid
 # Data structures
 # -------------------------------
 RegionName = str
-
 REGION_CHOICES: List[RegionName] = [
     "description_col",
     "nvalue_col",
@@ -117,7 +110,6 @@ def pdf_to_images(file_bytes: bytes) -> List[PageState]:
         pages.append(PageState(w=img.width, h=img.height, image=img))
     return pages
 
-
 def images_from_upload(files: List[io.BytesIO]) -> List[PageState]:
     out = []
     for f in files:
@@ -125,29 +117,21 @@ def images_from_upload(files: List[io.BytesIO]) -> List[PageState]:
         out.append(PageState(w=im.width, h=im.height, image=im))
     return out
 
-
 def crop(page: PageState, rel_rect: Tuple[float, float, float, float]) -> Image.Image:
     x0r, y0r, x1r, y1r = rel_rect
     x0, y0, x1, y1 = int(x0r * page.w), int(y0r * page.h), int(x1r * page.w), int(y1r * page.h)
     x0, y0 = max(0, x0), max(0, y0)
     x1, y1 = min(page.w - 1, x1), min(page.h - 1, y1)
     if x1 <= x0 + 1 or y1 <= y0 + 1:
-        # ensure non-empty region
         x1 = min(page.w, x0 + 2)
         y1 = min(page.h, y0 + 2)
     return page.image.crop((x0, y0, x1, y1))
 
-
 def image_to_gray_np(img: Image.Image) -> np.ndarray:
-    arr = np.asarray(img.convert("L"), dtype=np.uint8)
-    return arr
-
+    return np.asarray(img.convert("L"), dtype=np.uint8)
 
 def split_bands_with_params(img: Image.Image, sep_frac: float, min_band: int):
-    """Port of JS splitBandsWithParams.
-    Returns dict with keys: bands (list of [y0,y1]), seps(list of y)
-    Working in img pixel coordinates (top=0..h-1).
-    """
+    """Return {bands, seps}; works in local image pixels (y up-down)."""
     g = image_to_gray_np(img)
     h, w = g.shape
     dark = (g < 190).astype(np.uint8)
@@ -157,7 +141,6 @@ def split_bands_with_params(img: Image.Image, sep_frac: float, min_band: int):
     for y in range(h):
         row = dark[y]
         cov = int(row.sum())
-        # number of segments in the row (runs of 1s)
         s = 0
         run = 0
         for v in row:
@@ -171,7 +154,6 @@ def split_bands_with_params(img: Image.Image, sep_frac: float, min_band: int):
         frac[y] = cov / w
         segs[y] = s
 
-    # simple smoothing
     smooth = np.copy(frac)
     smooth[1:-1] = (frac[:-2] + frac[1:-1] + frac[2:]) / 3.0
 
@@ -200,12 +182,10 @@ def split_bands_with_params(img: Image.Image, sep_frac: float, min_band: int):
 
     return {"bands": bands, "seps": seps}
 
-
 def ocr_text(img: Image.Image, psm: int = 6) -> str:
     cfg = f"--psm {psm}"
     text = pytesseract.image_to_string(img, config=cfg) or ""
     return " ".join(text.split())
-
 
 def ocr_digits_with_pos(img: Image.Image):
     """Return list of dicts: {val, x, y, w, h} for pure integer tokens (<=3 digits)."""
@@ -219,15 +199,8 @@ def ocr_digits_with_pos(img: Image.Image):
                 val = int(s)
             except ValueError:
                 continue
-            out.append({
-                "val": val,
-                "x": data["left"][i],
-                "y": data["top"][i],
-                "w": data["width"][i],
-                "h": data["height"][i],
-            })
+            out.append({"val": val, "x": data["left"][i], "y": data["top"][i], "w": data["width"][i], "h": data["height"][i]})
     return out
-
 
 def depth_at_y(y_abs: float, page_index: int, ss: AppState) -> Optional[float]:
     dp = ss.dpx(page_index)
@@ -237,7 +210,6 @@ def depth_at_y(y_abs: float, page_index: int, ss: AppState) -> Optional[float]:
     td = ss.top_ft + base
     bd = ss.bot_ft + base
     return td + ((y_abs - dp.top_y) / (dp.bot_y - dp.top_y)) * (bd - td)
-
 
 # -------------------------------
 # Sidebar — Inputs and controls
@@ -250,7 +222,7 @@ with st.sidebar:
     st.write("— or —")
     img_files = st.file_uploader("Load page images (PNG/JPG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
-    if st.button("Load" ):
+    if st.button("Load"):
         if pdf_file is not None:
             SS.pages = pdf_to_images(pdf_file.read())
         elif img_files:
@@ -338,7 +310,6 @@ with left:
         # Show existing overlays
         overlay = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
         odraw = ImageDraw.Draw(overlay)
-        # Existing rectangles
         regs = SS.regs(SS.curr)
         for name, (x0r, y0r, x1r, y1r) in regs.items():
             x0, y0 = int(x0r * canvas_w), int(y0r * canvas_h)
@@ -358,19 +329,19 @@ with left:
             by = int(dp.bot_y * scale)
             odraw.line([(0, by), (canvas_w, by)], fill=(255, 0, 255, 200), width=2)
 
-        # Compose background+overlay for the canvas backdrop
-        bg_for_canvas = Image.alpha_composite(bg_disp.convert("RGBA"), overlay)
+        # Compose background+overlay for the canvas backdrop (force RGB)
+        bg_for_canvas = Image.alpha_composite(bg_disp.convert("RGBA"), overlay).convert("RGB")
 
         st.caption("Draw a rectangle for the selected region, or click once to set Top/Bottom when in pick modes.")
         canvas_res = st_canvas(
             fill_color="rgba(0, 0, 0, 0)",
             stroke_width=3,
             stroke_color="#4db6ac",
-            background_image=bg_for_canvas,
+            background_image=bg_for_canvas,    # must be RGB
             update_streamlit=True,
             height=canvas_h,
             width=canvas_w,
-            drawing_mode="transform" if draw_mode == "Rectangle" else "point",
+            drawing_mode="rect" if draw_mode == "Rectangle" else "point",
             key=f"canvas_{SS.curr}_{region_name}_{draw_mode}",
         )
 
@@ -378,7 +349,6 @@ with left:
         if canvas_res.json_data is not None:
             objs = canvas_res.json_data.get("objects", [])
             if draw_mode == "Rectangle":
-                # last rectangle defines the region
                 rect = None
                 for o in objs:
                     if o.get("type") == "rect":
@@ -389,7 +359,6 @@ with left:
                         rect = (left0, top0, left0 + w0, top0 + h0)
                 if rect is not None:
                     x0, y0, x1, y1 = rect
-                    # convert to relative coords in page space (not display space)
                     rel = (x0 / canvas_w, y0 / canvas_h, x1 / canvas_w, y1 / canvas_h)
                     if apply_all:
                         for i in range(len(SS.pages)):
@@ -397,14 +366,12 @@ with left:
                     else:
                         SS.regs(SS.curr)[region_name] = rel
             else:
-                # pick top/bottom based on last point
                 pt = None
                 for o in objs:
                     if o.get("type") == "circle":
                         left0 = o.get("left", 0.0)
                         top0 = o.get("top", 0.0)
                         r = o.get("radius", 2.0)
-                        # fabric uses circle center as left/top - radius
                         cx = left0 + r
                         cy = top0 + r
                         pt = (cx, cy)
@@ -424,15 +391,13 @@ with left:
                         else:
                             SS.dpx(SS.curr).bot_y = y_abs
 
-        # Preview separators button
         if st.button("Preview separators on this page"):
             r = SS.regs(SS.curr)
             if "description_col" not in r:
                 st.warning("Draw the description_col region first.")
             else:
-                desc_img = crop(page, r["description_col"])  # PIL
+                desc_img = crop(page, r["description_col"])
                 info = split_bands_with_params(desc_img, SS.sep_frac, SS.min_band)
-                # Draw separator overlays on preview image
                 preview = desc_img.convert("RGBA").copy()
                 d = ImageDraw.Draw(preview)
                 for y in info["seps"]:
@@ -450,7 +415,6 @@ with right:
         for i, pg in enumerate(SS.pages):
             bore = ""
             r = SS.regs(i)
-            # Try bore id from bore_box or header
             if r.get("bore_box"):
                 t = ocr_text(crop(pg, r["bore_box"]))
                 import re
@@ -528,7 +492,7 @@ with right:
                     water = m.group(1)
 
             # bands from description col
-            desc_img = crop(pg, r["description_col"])  # PIL
+            desc_img = crop(pg, r["description_col"])
             info = split_bands_with_params(desc_img, SS.sep_frac, SS.min_band)
             bands = info["bands"]
 
@@ -536,7 +500,6 @@ with right:
             dp2 = SS.dpx(i)
             rx0, ry0, rx1, ry1 = r["description_col"]
             y0_abs_base = ry0 * pg.h
-            y1_abs_base = ry1 * pg.h
 
             if SS.clip_depth and dp2.top_y is not None and dp2.bot_y is not None:
                 b2 = []
@@ -546,7 +509,6 @@ with right:
                     AA = max(A, dp2.top_y)
                     BB = min(B, dp2.bot_y)
                     if (BB - AA) > max(6, SS.min_band / 2):
-                        # convert back to local desc_img coords
                         b2.append((int(AA - y0_abs_base), int(BB - y0_abs_base)))
                 bands = b2
 
@@ -565,17 +527,15 @@ with right:
 
             # N-value column association
             if r.get("nvalue_col"):
-                nimg = crop(pg, r["nvalue_col"])  # PIL
+                nimg = crop(pg, r["nvalue_col"])
                 nums = ocr_digits_with_pos(nimg)
-                nx0, ny0, nx1, ny1 = r["nvalue_col"]
-                ny0_abs = ny0 * pg.h
+                ny0_abs = r["nvalue_col"][1] * pg.h
                 for blk in blocks:
                     vals = []
                     for n in nums:
                         cy = ny0_abs + n["y"] + n["h"] / 2
                         if blk["y0_abs"] <= cy <= blk["y1_abs"]:
                             vals.append(n["val"])
-                    # simple de-dup consecutive
                     uniq = []
                     for v in vals:
                         if not uniq or uniq[-1] != v:
@@ -633,14 +593,18 @@ with right:
             out = io.BytesIO()
             with pd.ExcelWriter(out, engine="openpyxl") as xw:
                 df.to_excel(xw, sheet_name="Bore Logs", index=False)
-            st.download_button("Download bore_logs_v5.xlsx", data=out.getvalue(), file_name="bore_logs_v5.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            st.download_button(
+                "Download bore_logs_v5.xlsx",
+                data=out.getvalue(),
+                file_name="bore_logs_v5.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
             st.success(f"Done. Rows: {len(rows)}")
 
 st.markdown("""
 ---
 **Notes**
-- This Streamlit port mirrors your web app's workflow: Load → Mark Regions & Depth → Extract.
-- For best OCR, scan PDFs at high resolution or upload original page images.
-- If Top/Bottom picks change across pages, uncheck *Apply to all pages* before picking.
-- The *Separator sensitivity* and *Min band height* controls affect band splitting just like in the JS version.
+- Load a PDF or page images, then draw regions in **Rectangle** mode and click to set **Top/Bottom** lines.
+- For best OCR, upload high-resolution scans.
+- *Separator sensitivity* and *Min band height* control band splitting; use **Preview separators** to verify.
 """)
