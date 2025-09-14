@@ -1,0 +1,8 @@
+streamlit
+streamlit-drawable-canvas
+Pillow
+numpy
+pandas
+openpyxl
+pytesseract
+pymupdf
