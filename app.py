@@ -1,6 +1,5 @@
 
 # app.py
-```python
 import io
 import json
 import math
