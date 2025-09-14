@@ -300,15 +300,15 @@ with left:
 
         # Prepare a background image for the canvas
         bg = page.image
-        canvas_w = min(1200, page.w)  # cap width for perf
+        canvas_w = min(1200, page.w)
         scale = canvas_w / page.w
         canvas_h = int(page.h * scale)
         bg_disp = bg.resize((canvas_w, canvas_h), Image.BILINEAR)
-
+        
         # Overlays (rectangles + depth lines)
         overlay = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
         odraw = ImageDraw.Draw(overlay)
-
+        
         # Existing rectangles
         regs = SS.regs(SS.curr)
         for name, (x0r, y0r, x1r, y1r) in regs.items():
@@ -317,9 +317,9 @@ with left:
             color = {
                 "description_col": (0, 200, 83, 160),  # green
                 "nvalue_col": (255, 23, 68, 160),      # red
-            }.get(name, (255, 213, 79, 120))            # amber
+            }.get(name, (255, 213, 79, 120))          # amber
             odraw.rectangle([x0, y0, x1, y1], outline=color, width=3)
-
+        
         # Top/Bottom lines
         dp = SS.dpx(SS.curr)
         if dp.top_y is not None:
@@ -328,23 +328,31 @@ with left:
         if dp.bot_y is not None:
             by = int(dp.bot_y * scale)
             odraw.line([(0, by), (canvas_w, by)], fill=(255, 0, 255, 200), width=2)
-
-        # Compose background+overlay → PIL RGB (important for st_canvas)
+        
+        # Compose background+overlay → PIL RGB
         bg_for_canvas = Image.alpha_composite(bg_disp.convert("RGBA"), overlay).convert("RGB")
-
+        
+        # --- DEBUG: you should see the page here. If this shows, the canvas must show too.
+        st.image(bg_for_canvas, caption="Debug: page preview", use_container_width=False)
+        
+        # Important: pass a *fresh copy* so the component gets a new object each rerun
+        bg_for_canvas_copy = bg_for_canvas.copy()
+        
         st.caption("Draw a rectangle for the selected region, or click once to set Top/Bottom when in pick modes.")
         canvas_res = st_canvas(
             fill_color="rgba(0, 0, 0, 0)",
             stroke_width=3,
             stroke_color="#4db6ac",
             background_color="#FFFFFF",
-            background_image=bg_for_canvas,     # pass PIL RGB image
+            background_image=bg_for_canvas_copy,   # ← fresh PIL.Image
             update_streamlit=True,
             height=canvas_h,
             width=canvas_w,
             drawing_mode="rect" if draw_mode == "Rectangle" else "point",
+            display_toolbar=True,                  # helps on some builds
             key=f"canvas_{SS.curr}_{region_name}_{draw_mode}",
         )
+
 
         # Interpret canvas interactions
         if canvas_res.json_data is not None:
