@@ -2,7 +2,8 @@
 # Port of the user's HTML/JS tool to a single-file Streamlit app.
 # --------------------------------------------------------------
 # Quickstart (local):
-#   1) pip install -U streamlit streamlit-drawable-canvas Pillow numpy pandas openpyxl pytesseract pymupdf
+#   1) pip install -U -r requirements.txt
+#      (or: pip install -U streamlit streamlit-drawable-canvas Pillow numpy pandas openpyxl pytesseract pymupdf)
 #   2) Install the Tesseract binary (required by pytesseract):
 #        - macOS: `brew install tesseract`
 #        - Ubuntu/Debian: `sudo apt-get install tesseract-ocr`
@@ -23,6 +24,24 @@ import pytesseract
 import fitz  # PyMuPDF
 
 import streamlit as st
+
+# --------------------------------------------------------------------
+# Compatibility shim for streamlit-drawable-canvas on newer Streamlit
+# --------------------------------------------------------------------
+# Some recent Streamlit versions moved `image_to_url` from
+# `streamlit.elements.image` to `streamlit.image_utils`. The
+# streamlit-drawable-canvas component still imports the old path.
+# The shim below restores that symbol for compatibility.
+import sys, types
+try:
+    # If this import works, you're on an older Streamlit and don't need the shim.
+    from streamlit.elements import image as _st_image  # noqa: F401
+except Exception:
+    from streamlit import image_utils as _st_image_utils
+    shim = types.ModuleType("streamlit.elements.image")
+    shim.image_to_url = _st_image_utils.image_to_url  # provide expected symbol
+    sys.modules["streamlit.elements.image"] = shim
+
 from streamlit_drawable_canvas import st_canvas
 
 st.set_page_config(page_title="Bore-Log Extractor v5 — Streamlit", layout="wide")
@@ -89,7 +108,6 @@ SS = st.session_state.SS
 # -------------------------------
 # Utilities
 # -------------------------------
-
 def pdf_to_images(file_bytes: bytes) -> List[PageState]:
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     pages: List[PageState] = []
