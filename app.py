@@ -434,7 +434,7 @@ with right:
             SS.page_offsets[i] = acc
             acc += span
 
-    def extract_rows() -> List[List]]:
+    def extract_rows() -> List[List]:
         compute_page_offsets()
         rows: List[List] = []
         import re
