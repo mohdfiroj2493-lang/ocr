@@ -23,10 +23,8 @@ import streamlit as st
 
 # --------------------------------------------------------------------
 # Compatibility shim for streamlit-drawable-canvas on newer Streamlit
+# (restores expected symbol streamlit.elements.image.image_to_url)
 # --------------------------------------------------------------------
-# Some recent Streamlit versions moved `image_to_url` from
-# `streamlit.elements.image` to `streamlit.image_utils`. The
-# streamlit-drawable-canvas component still imports the old path.
 import sys, types
 try:
     from streamlit.elements import image as _st_image  # noqa: F401
@@ -331,17 +329,16 @@ with left:
             by = int(dp.bot_y * scale)
             odraw.line([(0, by), (canvas_w, by)], fill=(255, 0, 255, 200), width=2)
 
-        # Compose background+overlay → **RGB NumPy array** (works across builds)
+        # Compose background+overlay → PIL RGB (important for st_canvas)
         bg_for_canvas = Image.alpha_composite(bg_disp.convert("RGBA"), overlay).convert("RGB")
-        bg_for_canvas_np = np.array(bg_for_canvas)
 
         st.caption("Draw a rectangle for the selected region, or click once to set Top/Bottom when in pick modes.")
         canvas_res = st_canvas(
             fill_color="rgba(0, 0, 0, 0)",
             stroke_width=3,
             stroke_color="#4db6ac",
-            background_color="#FFFFFF",         # ensure visible bg
-            background_image=bg_for_canvas_np,  # <-- NumPy array input
+            background_color="#FFFFFF",
+            background_image=bg_for_canvas,     # pass PIL RGB image
             update_streamlit=True,
             height=canvas_h,
             width=canvas_w,
@@ -437,7 +434,7 @@ with right:
             SS.page_offsets[i] = acc
             acc += span
 
-    def extract_rows() -> List[List]:
+    def extract_rows() -> List[List]]:
         compute_page_offsets()
         rows: List[List] = []
         import re
