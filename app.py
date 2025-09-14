@@ -274,7 +274,7 @@ with st.sidebar:
         SS.top_ft = float(cfg.get("topFt", SS.top_ft))
         SS.bot_ft = float(cfg.get("botFt", SS.bot_ft))
         SS.sep_frac = float(cfg.get("sepFrac", SS.sep_frac))
-        SS.min_band = int(cfg.get("minBand", SS.min_band))
+        SS.min_band = int(cfg.get("MinBand", SS.min_band)) if "MinBand" in cfg else int(cfg.get("minBand", SS.min_band))
         st.success("Config applied.")
 
 # -------------------------------
@@ -307,9 +307,11 @@ with left:
         canvas_h = int(page.h * scale)
         bg_disp = bg.resize((canvas_w, canvas_h), Image.BILINEAR)
 
-        # Show existing overlays
+        # Overlays (rectangles + depth lines)
         overlay = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
         odraw = ImageDraw.Draw(overlay)
+
+        # Existing rectangles
         regs = SS.regs(SS.curr)
         for name, (x0r, y0r, x1r, y1r) in regs.items():
             x0, y0 = int(x0r * canvas_w), int(y0r * canvas_h)
@@ -329,15 +331,17 @@ with left:
             by = int(dp.bot_y * scale)
             odraw.line([(0, by), (canvas_w, by)], fill=(255, 0, 255, 200), width=2)
 
-        # Compose background+overlay for the canvas backdrop (force RGB)
+        # Compose background+overlay → **RGB NumPy array** (works across builds)
         bg_for_canvas = Image.alpha_composite(bg_disp.convert("RGBA"), overlay).convert("RGB")
+        bg_for_canvas_np = np.array(bg_for_canvas)
 
         st.caption("Draw a rectangle for the selected region, or click once to set Top/Bottom when in pick modes.")
         canvas_res = st_canvas(
             fill_color="rgba(0, 0, 0, 0)",
             stroke_width=3,
             stroke_color="#4db6ac",
-            background_image=bg_for_canvas,    # must be RGB
+            background_color="#FFFFFF",         # ensure visible bg
+            background_image=bg_for_canvas_np,  # <-- NumPy array input
             update_streamlit=True,
             height=canvas_h,
             width=canvas_w,
