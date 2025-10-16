@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Bore-Log Extractor (v5 – Clip to Depth)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link rel="stylesheet" href="styles.css"/>
+  <!-- libs -->
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <script>
+    if (typeof pdfjsLib !== "undefined") {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>Bore-Log Extractor <span class="tag">v5</span></h1>
+
+    <section class="card">
+      <h2>1) Load PDF or Page Images</h2>
+      <div class="row wrap">
+        <div class="row">
+          <input type="file" id="pdf-file" accept="application/pdf"/>
+          <button id="btn-load-pdf">Load PDF</button>
+        </div>
+        <div class="row muted">— or —</div>
+        <div class="row">
+          <input type="file" id="img-files" accept="image/png,image/jpeg" multiple/>
+          <button id="btn-load-imgs">Load Images</button>
+        </div>
+      </div>
+      <p id="load-status" class="muted"></p>
+      <p class="muted">Tip: if PDF doesn't load, open this page via a local server:<br/>
+      <code>python -m http.server 5500</code> → open <code>http://127.0.0.1:5500</code></p>
+    </section>
+
+    <section class="card hidden" id="work-area">
+      <h2>2) Mark Regions & Depth</h2>
+      <div class="row wrap">
+        <div class="row">
+          <button id="prev-page">◀</button>
+          <span id="page-info">0 / 0</span>
+          <button id="next-page">▶</button>
+        </div>
+        <div class="row">
+          <label>Region
+            <select id="region-name">
+              <option>description_col</option>
+              <option>nvalue_col</option>
+              <option>header</option>
+              <option>bore_box</option>
+              <option>lat_box</option>
+              <option>lon_box</option>
+              <option>water_box</option>
+              <option>elev_box</option>
+              <option>footer</option>
+            </select>
+          </label>
+          <button id="mode-rect" class="pill">Rectangle</button>
+          <button id="mode-top" class="pill">Pick Top</button>
+          <button id="mode-bot" class="pill">Pick Bottom</button>
+          <label class="chk"><input type="checkbox" id="apply-all" checked/> Apply to all pages</label>
+          <button id="btn-clear" title="Clear current region">Clear current</button>
+        </div>
+      </div>
+
+      <div class="row wrap">
+        <div class="row">
+          <strong>Zoom:</strong>
+          <button id="zoom-out">−</button>
+          <button id="zoom-100">100%</button>
+          <button id="zoom-in">+</button>
+          <span id="zoom-label" class="muted">100%</span>
+        </div>
+        <div class="row">
+          <label>Top depth (ft) <input id="top-depth" type="number" step="0.1" value="0.0"/></label>
+          <label>Bottom depth (ft) <input id="bot-depth" type="number" step="0.1" value="36.0"/></label>
+          <label class="chk"><input type="checkbox" id="snap-top" checked/> Snap first band to Top</label>
+          <label class="chk"><input type="checkbox" id="snap-bot" checked/> Snap last band to Bottom</label>
+          <label class="chk"><input type="checkbox" id="clip-depth" checked/> Clip bands to Top/Bottom</label>
+        </div>
+        <div class="row">
+          <label>Separator sensitivity <input id="sep-frac" type="number" min="0.10" max="0.60" step="0.01" value="0.45"/></label>
+          <label>Min band height (px) <input id="min-band" type="number" min="6" step="1" value="40"/></label>
+          <button id="btn-preview">Preview separators</button>
+        </div>
+      </div>
+
+      <div class="canvas-wrap"><canvas id="page-canvas"></canvas></div>
+
+      <div class="row wrap">
+        <button id="btn-save">Save Config JSON</button>
+        <label class="filelike">Load Config <input type="file" id="btn-loadcfg" accept="application/json"/></label>
+      </div>
+    </section>
+
+    <section class="card hidden" id="extract-area">
+      <h2>3) Extract → Excel</h2>
+      <button id="btn-extract" class="primary">Extract & Download</button>
+      <p id="extract-status" class="muted"></p>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
